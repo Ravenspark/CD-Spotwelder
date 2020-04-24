@@ -1,0 +1,6 @@
+#!/bin/bash
+# The current spi driver seems to have a bug when using 8bit mode and unaligned variables...
+# As a quick workaround this file replaces the generated file with a fixed one
+rm ./Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_spi.c
+cp ./Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_spi.c.fix ./Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_spi.c
+echo "replaced faulty spi file"

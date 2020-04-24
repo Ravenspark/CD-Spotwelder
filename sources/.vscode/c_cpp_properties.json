@@ -1,0 +1,28 @@
+{
+    "configurations": [
+        {
+            "name": "Spotwelder",
+            "includePath": [
+                "${workspaceFolder}/Inc",
+                "${workspaceFolder}/Src",
+                "${workspaceFolder}/Inc/spotwelder",
+                "${workspaceFolder}/Src/spotwelder",
+                "${workspaceFolder}/Middlewares/ST/STM32_USB_Device_Library/Core/Inc",
+                "${workspaceFolder}/Drivers/st7735/Inc",
+                "${workspaceFolder}/Drivers/STM32F0xx_HAL_Driver/Inc",
+                "${workspaceFolder}/Drivers/STM32F0xx_HAL_Driver/Src",
+                "${workspaceFolder}/Drivers/STM32F0xx_HAL_Driver/Inc/Legacy",
+                "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32F0xx/Include",
+                "${workspaceFolder}/Drivers/CMSIS/Include"
+            ],
+            "defines": [
+                "STM32F072xB",
+                "USE_HAL_DRIVER"],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "clang-x64"
+        }
+    ],
+    "version": 4
+}

@@ -1,0 +1,3 @@
+[submodule "sources/Drivers/st7735"]
+	path = sources/Drivers/st7735
+	url = https://github.com/Ravenspark/stm32-st7735.git
