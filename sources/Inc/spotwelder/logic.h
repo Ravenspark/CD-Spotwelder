@@ -25,7 +25,10 @@
 #define SHRT_PRESS_TIME	200
 #define LNG_PRESS_TIME	1000
 
-typedef struct value_t{int16_t min; int16_t val; int16_t max; int16_t inc;} value_t;
+//typedef union {int16_t iValue; float fValue;}uVal_t;
+typedef enum {vINT, vFLOAT, vSTRING} type_t;
+//typedef struct value_t{uVal_t min; uVal_t val; uVal_t max; uVal_t inc; const char *desc} value_t;
+typedef struct value_t{int16_t min; int16_t val; int16_t max; int16_t inc; /*const char *fmt;*/ const char *desc; type_t type} value_t;
 
 
 enum buttonEvent_t
@@ -104,7 +107,8 @@ typedef struct settingsCollection_t settingsCollection_t;
 extern volatile uint8_t adcReady;
 
 dataCollection_t* initLogic();
-void updateState(volatile buttonEvent_t *menuBtnEvent, volatile rotaryEvent_t *rotEvent, volatile buttonEvent_t *footSwEvent);
+//void updateState(volatile buttonEvent_t *menuBtnEvent, volatile rotaryEvent_t *rotEvent, volatile buttonEvent_t *footSwEvent);
+void updateState();
 
 void checkButton(volatile buttonEvent_t *event);
 

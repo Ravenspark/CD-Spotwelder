@@ -26,6 +26,7 @@
 /* USER CODE BEGIN Includes */
 #include "stdint.h"
 #include "logic.h"
+#include "audioPlayer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,6 +47,7 @@
 ADC_HandleTypeDef hadc;
 
 DAC_HandleTypeDef hdac;
+DMA_HandleTypeDef hdma_dac_ch1;
 
 SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
@@ -53,13 +55,14 @@ SPI_HandleTypeDef hspi2;
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim6;
 TIM_HandleTypeDef htim14;
 TIM_HandleTypeDef htim15;
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 
-dataCollection_t *pdata;
+/*dataCollection_t *pdata;
 //volatile buttonEvent_t rot, foot, menu;
 
 
@@ -69,14 +72,16 @@ char strBuffer[32];
 volatile uint16_t tacho=0;
 
 //dataCollection_t *pData;
-volatile buttonEvent_t buttonEvent = NONE_PRESSED;
-volatile buttonEvent_t footSwEvent = NONE_PRESSED;
-volatile rotaryEvent_t rotEvent = ROT_NONE;
+volatile buttonEvent_t buttonEvent,lbuttonEvent = NONE_PRESSED;
+volatile buttonEvent_t footSwEvent,lfootSwEvent = NONE_PRESSED;
+volatile rotaryEvent_t rotEvent,lrotEvent = ROT_NONE;*/
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_ADC_Init(void);
 static void MX_DAC_Init(void);
 static void MX_SPI1_Init(void);
@@ -86,6 +91,7 @@ static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM14_Init(void);
 static void MX_TIM15_Init(void);
+static void MX_TIM6_Init(void);
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 
@@ -95,7 +101,7 @@ static void MX_TIM15_Init(void);
 /* USER CODE BEGIN 0 */
 
 uint8_t red, green, blue;
-
+/*
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
 	static uint8_t lastState=0;
@@ -125,7 +131,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			  //updateUIRot(CCW);
 			  rotEvent = ROT_DEC;
 	  }
-}
+}*/
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
@@ -165,6 +171,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_ADC_Init();
   MX_DAC_Init();
   MX_SPI1_Init();
@@ -175,6 +182,7 @@ int main(void)
   MX_TIM14_Init();
   MX_USB_DEVICE_Init();
   MX_TIM15_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start(&htim1);
   HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_ALL);
@@ -194,8 +202,10 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim15); //GP Timer 20ms/50Hz
   HAL_TIM_IC_Start_IT(&htim14,TIM_CHANNEL_1);
 
-  pdata = initLogic();
+  //pdata = initLogic();
+  initLogic();
 
+    playerInit(&htim6, &hdac, &hdma_dac_ch1);
   /* USER CODE END 2 */
  
  
@@ -207,8 +217,9 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    updateState(&buttonEvent, &rotEvent, &footSwEvent);
-    HAL_Delay(10);
+    //updateState(&buttonEvent, &rotEvent, &footSwEvent);
+    updateState();
+    HAL_Delay(5);
 
   }
   /* USER CODE END 3 */
@@ -377,7 +388,7 @@ static void MX_DAC_Init(void)
   }
   /** DAC channel OUT1 config 
   */
-  sConfig.DAC_Trigger = DAC_TRIGGER_SOFTWARE;
+  sConfig.DAC_Trigger = DAC_TRIGGER_T6_TRGO;
   sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
   if (HAL_DAC_ConfigChannel(&hdac, &sConfig, DAC_CHANNEL_1) != HAL_OK)
   {
@@ -643,6 +654,44 @@ static void MX_TIM3_Init(void)
 }
 
 /**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 4-1;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 1500-1;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
+
+}
+
+/**
   * @brief TIM14 Initialization Function
   * @param None
   * @retval None
@@ -730,6 +779,22 @@ static void MX_TIM15_Init(void)
   /* USER CODE BEGIN TIM15_Init 2 */
 
   /* USER CODE END TIM15_Init 2 */
+
+}
+
+/** 
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void) 
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel2_3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel2_3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
 
 }
 

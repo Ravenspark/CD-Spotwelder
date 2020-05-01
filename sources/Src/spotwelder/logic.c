@@ -1,17 +1,17 @@
-/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
-* Copyright 2020 Ravenspark (S.Gerber)
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
+/*  * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * 
+* Copyright 2020 Ravenspark (S.Gerber)                              *  *
+*                                                                   *     *
+* Licensed under the Apache License, Version 2.0 (the "License");   * * * * *
+* you may not use this file except in compliance with the License.          *
+* You may obtain a copy of the License at                                   *
+*                                                                           *
+*     http://www.apache.org/licenses/LICENSE-2.0                            *
+*                                                                           *
+* Unless required by applicable law or agreed to in writing, software       *
+* distributed under the License is distributed on an "AS IS" BASIS,         *
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  *
+* See the License for the specific language governing permissions and       *
+* limitations under the License.                                            *
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
 #include "main.h"
@@ -20,8 +20,33 @@
 
 #include "monoImages.h"
 
+#include "audioPlayer.h"
+
 
 #include "st7735.h"
+
+
+
+
+dataCollection_t *pdata;
+//volatile buttonEvent_t rot, foot, menu;
+
+
+volatile uint16_t tacho=0;
+
+//dataCollection_t *pData;
+volatile buttonEvent_t buttonEvent = NONE_PRESSED;
+volatile buttonEvent_t footSwEvent= NONE_PRESSED;
+volatile rotaryEvent_t rotEvent = ROT_NONE;
+
+extern TIM_HandleTypeDef htim1;
+extern TIM_HandleTypeDef htim2;
+extern TIM_HandleTypeDef htim3;
+extern TIM_HandleTypeDef htim6;
+extern TIM_HandleTypeDef htim14;
+extern TIM_HandleTypeDef htim15;
+
+
 
 extern DAC_HandleTypeDef hadc;
 
@@ -54,9 +79,46 @@ volatile weldingstate_t weldingState=WAITING;
 value_t p1Values ={1,20,20,1}, p2Values={10,500,500,10}, pauseValues={5,100,100,5};
 
 
-value_t settingValues[] = {{1,10,20,1}, {10,150,500,10}, {5,20,100,5}, {10,50,100,5}}; //pulse1 duration, pulse2 duration, pause duration, voltage x10
+value_t settingValues[] = {{1,10,20,1, "pulse1: %d",vINT}, {10,150,500,10, "pulse2: %d",vINT}, {5,20,100,5, "pause: %d",vINT}, {10,50,100,5, "voltage: %02d.%1d",vFLOAT}, {0,0,0,0, "exit?",vSTRING}}; //pulse1 duration, pulse2 duration, pause duration, voltage x10, exit
 
 //typedef menuIcon_t menuIcon_t;
+
+
+
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	static uint8_t lastState=0;
+	static uint16_t cnt=0;
+
+  if(htim->Instance == htim2.Instance)
+    {
+    	weldingTimerISR();
+
+    }
+  else if(htim->Instance == htim15.Instance)
+  {
+	  checkButton(&buttonEvent);
+  }
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	  if(GPIO_Pin == ROT_A_Pin)//Rotary encoder turned
+	  {
+		  if(HAL_GPIO_ReadPin(ROT_B_GPIO_Port, ROT_B_Pin)==GPIO_PIN_SET)
+			  //turned clockwise
+		  	  rotEvent = ROT_INC;
+		  else
+			  //turned counterclockwise
+			  rotEvent = ROT_DEC;
+	  }
+}
+
+
+
+
+
 
 void demoFunc(buttonEvent_t btnEvent, rotaryEvent_t rotEvent)
 {
@@ -242,45 +304,54 @@ void plotGraph(uint8_t *xValues, uint8_t *yValues, uint8_t xRange, uint8_t yRang
 }
 
 
-//TODO: make menu more general
-bool drawSettingsMenu(buttonEvent_t menuBtnEvent, rotaryEvent_t *rotEvent)
+void makeStr(char *strbuf, value_t *value)
+{
+    switch(value->type)
+    {
+        default:
+        case vINT: sprintf(strbuf,value->desc,value->val); break;
+        case vFLOAT: sprintf(strbuf,value->desc,value->val/10,value->val%10); break;
+        case vSTRING: sprintf(strbuf,value->desc); break;
+    }
+}
+
+bool drawSettingsMenu(buttonEvent_t menuBtnEvent, rotaryEvent_t rotEvent)
 {
     bool exit=false;
-	static uint8_t values[3]={0}, idx=0, selected=0;
+    static bool selected=false;
+	static uint8_t idx=0;
 
-	if(menuBtnEvent==SHRT_PRESSED) selected = !selected;
+	if(menuBtnEvent==SHRT_PRESSED) 
+    {
+        selected = !selected;
+    }
 	if(!selected)
 	{
-		if(*rotEvent==ROT_INC) idx++;
-		if(*rotEvent==ROT_DEC) idx--;
+		if(rotEvent==ROT_INC) idx++;
+		if(rotEvent==ROT_DEC) idx--;
         if(idx==255) idx=4;
         if(idx>4) idx=0;
 	}
 	else
 	{
-		if(*rotEvent==ROT_INC)
+		if(rotEvent==ROT_INC)
 		    {
 		        settingValues[idx].val += settingValues[idx].inc;
                 if(settingValues[idx].val>settingValues[idx].max) settingValues[idx].val=settingValues[idx].max;
 		    }
-		if(*rotEvent==ROT_DEC)
+		if(rotEvent==ROT_DEC)
 		    {
                 settingValues[idx].val -= settingValues[idx].inc;
                 if(settingValues[idx].val<settingValues[idx].min) settingValues[idx].val=settingValues[idx].min;
 		    }
 	}
-	*rotEvent=ROT_NONE;
 
-	sprintf(strBuffer,"pulse1: %03d",settingValues[0].val);
-	ST7735_WriteString(0,0,strBuffer,Font_7x10,(idx==0)? (selected? ST7735_BLUE:ST7735_RED):ST7735_WHITE, ST7735_BLACK);
-    sprintf(strBuffer,"pause: %03d",settingValues[2].val);
-    ST7735_WriteString(0,15,strBuffer,Font_7x10,(idx==1)? (selected? ST7735_BLUE:ST7735_RED):ST7735_WHITE, ST7735_BLACK);
-    sprintf(strBuffer,"pulse2: %03d",settingValues[1].val);
-    ST7735_WriteString(0,30,strBuffer,Font_7x10,(idx==2)? (selected? ST7735_BLUE:ST7735_RED):ST7735_WHITE, ST7735_BLACK);
-    sprintf(strBuffer,"voltage: %02d.%1d",settingValues[3].val/10,settingValues[3].val%10);
-    ST7735_WriteString(0,45,strBuffer,Font_7x10,(idx==3)? (selected? ST7735_BLUE:ST7735_RED):ST7735_WHITE, ST7735_BLACK);
-    sprintf(strBuffer,"exit?");
-    ST7735_WriteString(0,60,strBuffer,Font_7x10,(idx==4)? ST7735_RED:ST7735_WHITE, ST7735_BLACK);
+//TODO: only draw when something has changed?
+   for(int i=0; i<5; i++)
+   {	
+        makeStr(strBuffer,&settingValues[i]);
+	    ST7735_WriteString(0,i*15,strBuffer,Font_7x10,(idx==i)? (selected? ST7735_BLUE:ST7735_RED):ST7735_WHITE, ST7735_BLACK);
+   }
 
 	if((idx==4)&&selected)
 	{
@@ -291,6 +362,8 @@ bool drawSettingsMenu(buttonEvent_t menuBtnEvent, rotaryEvent_t *rotEvent)
 
 	return exit;
 }
+
+
 
 void drawVolume(uint8_t x, uint8_t y, uint8_t vol)
 {
@@ -342,11 +415,19 @@ inline void weldingTimerISR()
 //hadc.Instance->CHSELR |= (ADC_CHSELR_CHANNEL(ADC_CHANNEL_0)|ADC_CHSELR_CHANNEL(ADC_CHANNEL_1)|ADC_CHSELR_CHANNEL(ADC_CHANNEL_2));
 
 
-void updateState(volatile buttonEvent_t *menuBtnEvent, volatile rotaryEvent_t *rotEvent, volatile buttonEvent_t *footSwEvent)
+//void updateState(volatile buttonEvent_t *menuBtnEvent, volatile rotaryEvent_t *rotEvent, volatile buttonEvent_t *footSwEvent)
+void updateState()
 {
     static state_t lastState=999;
 	static uint8_t mode=0;
 	uint8_t xTest[]={0,1,2,3,4,5,6,7,8,9,10,11,12,13,14}, yTest[]={5,7,8,9,8,7,5,3,2,1,2,3,5};
+
+
+    //buttonEvent_t tmpMenuBtnEvent = *menuBtnEvent, tmpFootSwEvent = *footSwEvent;
+    //rotaryEvent_t tmpRotEvent = *rotEvent; 
+    buttonEvent_t tmpMenuBtnEvent = buttonEvent, tmpFootSwEvent = footSwEvent;
+    rotaryEvent_t tmpRotEvent = rotEvent; 
+
 	/*
 	sprintf(strBuffer,"Supply: %2.2f", data.vSupply);
 	ST7735_WriteString(0, 0, strBuffer, Font_7x10, ST7735_WHITE, ST7735_BLACK);
@@ -419,14 +500,16 @@ void updateState(volatile buttonEvent_t *menuBtnEvent, volatile rotaryEvent_t *r
 			state = IDLE;
 			break;
 		case IDLE:
-		    if(*menuBtnEvent == DOUBLE_PRESSED) state=ENTER_CHARGING;
-		    else if(*menuBtnEvent == LONG_PRESSED) state=ENTER_SETTINGS;
+		    if(tmpMenuBtnEvent == DOUBLE_PRESSED) state=ENTER_CHARGING;
+		    else if(tmpMenuBtnEvent == LONG_PRESSED) state=ENTER_SETTINGS;
 		break;
 
 		case ENTER_CHARGING:
 			setLEDColor(100,0,0);
 		    drawIcon(&menuIcons[2],true);
 		    drawIcon(&menuIcons[1],autoweld);
+            drawVolume(50,50,100);
+            //playerStart();
 			chargerPowerOn();
 			state = CHARGING;
 			break;
@@ -436,19 +519,20 @@ void updateState(volatile buttonEvent_t *menuBtnEvent, volatile rotaryEvent_t *r
 		break;
 
 		case ENTER_CHARGED:
+            //playerStop();
 			setLEDColor(0,100,0);
 			chargerPowerOff();
 			state = CHARGED;
 			break;
 
 		case CHARGED:
-            if(*menuBtnEvent==DOUBLE_PRESSED){state=ENTER_DISCHARGING;}
-            if(*menuBtnEvent==LONG_PRESSED)
+            if(tmpMenuBtnEvent==DOUBLE_PRESSED){state=ENTER_DISCHARGING;}
+            if(tmpMenuBtnEvent==LONG_PRESSED)
             {
                 autoweld = !autoweld;
                 drawIcon(&menuIcons[1],autoweld);
             }
-			if(*footSwEvent==SHRT_PRESSED) state=ENTER_WELDING;
+			if(tmpFootSwEvent==SHRT_PRESSED) state=ENTER_WELDING;
 		break;
 
 		case ENTER_DISCHARGING:
@@ -477,7 +561,7 @@ void updateState(volatile buttonEvent_t *menuBtnEvent, volatile rotaryEvent_t *r
 
 		case ENTER_SETTINGS: state = SETTINGS; break;
 		case SETTINGS:
-		    if(drawSettingsMenu(*menuBtnEvent,rotEvent)) state=ENTER_IDLE;
+		    if(drawSettingsMenu(tmpMenuBtnEvent,tmpRotEvent)) state=ENTER_IDLE;
 		    break;
 
 		case ENTER_WELDQUALITY:
@@ -502,15 +586,17 @@ void updateState(volatile buttonEvent_t *menuBtnEvent, volatile rotaryEvent_t *r
 		    break;
 	}
 
-    //*rotEvent = ROT_NONE;
-    *menuBtnEvent=NONE_PRESSED;
-    *footSwEvent=NONE_PRESSED;
+    //if(*menuBtnEvent == tmpMenuBtnEvent) *menuBtnEvent=NONE_PRESSED; //Only reset if no new event is waiting
+    //if(*footSwEvent == tmpFootSwEvent) *footSwEvent=NONE_PRESSED; //Only reset if no new event is waiting
+    //if(*rotEvent == tmpRotEvent) *rotEvent = ROT_NONE; //Only reset if no new event is waiting
+    if(buttonEvent == tmpMenuBtnEvent) buttonEvent=NONE_PRESSED; //Only reset if no new event is waiting
+    if(footSwEvent == tmpFootSwEvent) footSwEvent=NONE_PRESSED; //Only reset if no new event is waiting
+    if(rotEvent == tmpRotEvent) rotEvent = ROT_NONE; //Only reset if no new event is waiting
 
 }
 
-enum btnStates {BTN_PREPARE, BTN_NONE, BTN_IS_PRESSED, BTN_IS_RELEASED, BTN_WAIT, BTN_RECOVER};
+static enum btnStates {BTN_PREPARE, BTN_NONE, BTN_IS_PRESSED, BTN_IS_RELEASED, BTN_WAIT, BTN_RECOVER};
 
-//TODO: Timer is to fast and overwrites last button event before it is handled... Event queue or eq.
  void checkButton(volatile buttonEvent_t *event)
 {
 	static uint16_t counter=0;
