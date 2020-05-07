@@ -92,6 +92,7 @@ void Error_Handler(void);
 #define DISCHARGE_GPIO_Port GPIOB
 #define FOOT_SW_Pin GPIO_PIN_10
 #define FOOT_SW_GPIO_Port GPIOB
+#define FOOT_SW_EXTI_IRQn EXTI4_15_IRQn
 #define TRIGGER_Pin GPIO_PIN_11
 #define TRIGGER_GPIO_Port GPIOB
 #define FLSH_CS_Pin GPIO_PIN_12

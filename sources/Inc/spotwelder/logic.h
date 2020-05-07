@@ -50,6 +50,22 @@ enum rotaryEvent_t
 
 typedef enum rotaryEvent_t rotaryEvent_t;
 
+typedef enum {
+	ENTER_IDLE,
+	IDLE,
+	ENTER_CHARGING,
+	CHARGING,
+	ENTER_CHARGED,
+	CHARGED,
+	ENTER_DISCHARGING,
+	DISCHARGING,
+	ENTER_WELDING,
+	WELDING,
+	ENTER_SETTINGS,
+	SETTINGS,
+    ENTER_WELDQUALITY,
+    WELDQUALITY
+} state_t;
 
 struct dataCollection_t
 {
@@ -63,6 +79,7 @@ struct dataCollection_t
 	};
 
 typedef struct dataCollection_t dataCollection_t;
+
 
 typedef struct menuIcon_t
 {
@@ -104,7 +121,24 @@ struct settingsCollection_t
 
 typedef struct settingsCollection_t settingsCollection_t;
 
-extern volatile uint8_t adcReady;
+struct data_t
+{
+    int16_t val;
+    const char *desc;
+    type_t type;
+};
+typedef struct data_t data_t;
+
+//extern volatile uint8_t adcReady;
+
+extern TIM_HandleTypeDef htim1;
+extern TIM_HandleTypeDef htim2;
+extern TIM_HandleTypeDef htim3;
+extern TIM_HandleTypeDef htim6;
+extern TIM_HandleTypeDef htim14;
+extern TIM_HandleTypeDef htim15;
+extern DAC_HandleTypeDef hdac;
+extern ADC_HandleTypeDef hadc;
 
 dataCollection_t* initLogic();
 //void updateState(volatile buttonEvent_t *menuBtnEvent, volatile rotaryEvent_t *rotEvent, volatile buttonEvent_t *footSwEvent);

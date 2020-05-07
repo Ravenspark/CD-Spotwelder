@@ -46,8 +46,8 @@
      const uint8_t image_data_attention_32x32[128];
      const tImage attention_32x32;
 
-     const uint8_t image_data_battery1_32x32[128];
-     const tImage battery1_32x32;
+     const uint8_t image_data_battery_32x32[128];
+     const tImage battery_32x32;
 
      const uint8_t image_data_fan_32x32[128];
      const tImage fan_32x32;

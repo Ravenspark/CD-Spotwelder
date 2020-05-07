@@ -439,7 +439,7 @@ const tImage attention_32x32 = { image_data_attention_32x32, 32, 32,
     8 };
 
 
-const uint8_t image_data_battery1_32x32[128] = {
+const uint8_t image_data_battery_32x32[128] = {
     // *************∙∙∙∙∙**************
     // *************∙∙∙∙∙∙*************
     // *********∙∙∙∙∙∙∙∙∙∙∙∙∙**********
@@ -505,7 +505,7 @@ const uint8_t image_data_battery1_32x32[128] = {
     0xff, 0x7f, 0xfc, 0xff,
     0xff, 0x00, 0x01, 0xff
 };
-const tImage battery1_32x32 = { image_data_battery1_32x32, 32, 32,
+const tImage battery_32x32 = { image_data_battery_32x32, 32, 32,
     8 };
 
 

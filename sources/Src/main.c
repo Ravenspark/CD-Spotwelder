@@ -45,6 +45,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc;
+DMA_HandleTypeDef hdma_adc;
 
 DAC_HandleTypeDef hdac;
 DMA_HandleTypeDef hdma_dac_ch1;
@@ -133,13 +134,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	  }
 }*/
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
-{
-	adcReady=1;
-}
 
-//extern float calcVoltage(uint16_t val);
-//extern float calcTemp(uint16_t val);
+
 /* USER CODE END 0 */
 
 /**
@@ -184,8 +180,9 @@ int main(void)
   MX_TIM15_Init();
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start(&htim1);
-  HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_ALL);
+
+  //HAL_TIM_Base_Start(&htim1);
+  //HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_ALL);
 
 
 //TIM1 CH1-4 -> RGB PWM
@@ -202,9 +199,10 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim15); //GP Timer 20ms/50Hz
   HAL_TIM_IC_Start_IT(&htim14,TIM_CHANNEL_1);
 
+  //HAL_TIM_Base_Start(&htim2);
+
   //pdata = initLogic();
   initLogic();
-
     playerInit(&htim6, &hdac, &hdma_dac_ch1);
   /* USER CODE END 2 */
  
@@ -217,7 +215,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    //updateState(&buttonEvent, &rotEvent, &footSwEvent);
     updateState();
     HAL_Delay(5);
 
@@ -574,12 +571,16 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 0;
+  htim2.Init.Prescaler = 24000-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 0;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.Period = 1000;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV2;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_OC_Init(&htim2) != HAL_OK)
+  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_OnePulse_Init(&htim2, TIM_OPMODE_SINGLE) != HAL_OK)
   {
     Error_Handler();
   }
@@ -589,11 +590,11 @@ static void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_TIMING;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCMode = TIM_OCMODE_PWM2;
+  sConfigOC.Pulse = 500;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_LOW;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
   {
     Error_Handler();
   }
@@ -792,6 +793,9 @@ static void MX_DMA_Init(void)
   __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
   /* DMA1_Channel2_3_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel2_3_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
@@ -853,10 +857,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : FOOT_SW_Pin ROT_SW_Pin */
-  GPIO_InitStruct.Pin = FOOT_SW_Pin|ROT_SW_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  /*Configure GPIO pins : FOOT_SW_Pin ROT_A_Pin */
+  GPIO_InitStruct.Pin = FOOT_SW_Pin|ROT_A_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : FLSH_CS_Pin */
@@ -879,11 +883,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(ROT_B_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : ROT_A_Pin */
-  GPIO_InitStruct.Pin = ROT_A_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(ROT_A_GPIO_Port, &GPIO_InitStruct);
+  /*Configure GPIO pin : ROT_SW_Pin */
+  GPIO_InitStruct.Pin = ROT_SW_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(ROT_SW_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI4_15_IRQn, 0, 0);

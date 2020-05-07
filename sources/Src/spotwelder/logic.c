@@ -18,18 +18,13 @@
 #include "logic.h"
 #include "helpers.h"
 
-#include "monoImages.h"
-
 #include "audioPlayer.h"
-
-
+#include "monoImages.h"
 #include "st7735.h"
 
 
 
-
 dataCollection_t *pdata;
-//volatile buttonEvent_t rot, foot, menu;
 
 
 volatile uint16_t tacho=0;
@@ -39,51 +34,31 @@ volatile buttonEvent_t buttonEvent = NONE_PRESSED;
 volatile buttonEvent_t footSwEvent= NONE_PRESSED;
 volatile rotaryEvent_t rotEvent = ROT_NONE;
 
-extern TIM_HandleTypeDef htim1;
-extern TIM_HandleTypeDef htim2;
-extern TIM_HandleTypeDef htim3;
-extern TIM_HandleTypeDef htim6;
-extern TIM_HandleTypeDef htim14;
-extern TIM_HandleTypeDef htim15;
 
-
-
-extern DAC_HandleTypeDef hadc;
 
 #define ADC_BUFF_SIZE 7
 
 volatile uint8_t adcReady=0;
 uint16_t adcBuffer[ADC_BUFF_SIZE];
 
-typedef enum {
-	ENTER_IDLE,
-	IDLE,
-	ENTER_CHARGING,
-	CHARGING,
-	ENTER_CHARGED,
-	CHARGED,
-	ENTER_DISCHARGING,
-	DISCHARGING,
-	ENTER_WELDING,
-	WELDING,
-	ENTER_SETTINGS,
-	SETTINGS,
-    ENTER_WELDQUALITY,
-    WELDQUALITY
-} state_t;
-
 typedef enum weldingstate_t {WAITING, WELDING1, WELDING2, PAUSING} weldingstate_t;
 
+
+uint8_t xTest[]={0,1,2,3,4,5,6,7,8,9,10,11,12,13,14}, yTest[]={5,7,8,9,8,7,5,3,2,1,2,3,5};
 
 volatile weldingstate_t weldingState=WAITING;
 value_t p1Values ={1,20,20,1}, p2Values={10,500,500,10}, pauseValues={5,100,100,5};
 
 
-value_t settingValues[] = {{1,10,20,1, "pulse1: %d",vINT}, {10,150,500,10, "pulse2: %d",vINT}, {5,20,100,5, "pause: %d",vINT}, {10,50,100,5, "voltage: %02d.%1d",vFLOAT}, {0,0,0,0, "exit?",vSTRING}}; //pulse1 duration, pulse2 duration, pause duration, voltage x10, exit
+//value_t settingValues[] = {{1,10,20,1, "pulse1: %d",vINT}, {10,150,500,10, "pulse2: %d",vINT}, {5,20,100,5, "pause: %d",vINT}, {10,50,100,5, "voltage: %02d.%1d",vFLOAT}, {0,0,0,0, "exit?",vSTRING}}; //pulse1 duration, pulse2 duration, pause duration, voltage x10, exit
+value_t settingValues[] = {{1,10,20,1, "pulse1:",vSTRING}, {10,150,500,10, "pulse2:",vSTRING}, {5,20,100,5, "pause:",vSTRING}, {10,50,100,5, "voltage:",vSTRING}, {0,0,0,0, "exit?",vSTRING}}; //pulse1 duration, pulse2 duration, pause duration, voltage x10, exit
 
 //typedef menuIcon_t menuIcon_t;
 
-
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+	adcReady=1;
+}
 
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
@@ -113,6 +88,10 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			  //turned counterclockwise
 			  rotEvent = ROT_DEC;
 	  }
+      else if(GPIO_Pin == FOOT_SW_Pin)
+      {
+          footSwEvent = SHRT_PRESSED;
+      }
 }
 
 
@@ -133,13 +112,15 @@ menuIcon_t menuIcons[] ={
 
 
 menuIcon_t menuIcons2[] ={
-			{&fan_32x32, 0, 0, &demoFunc},
-			{&resart_32x32, 32,0, &demoFunc},
-			{&pwr_32x32, 64, 0, &demoFunc},
-			{&settings_32x32, 96, 0, &demoFunc}
-			};
+            {&fan_32x32, 0, 0, &demoFunc},
+            {&resart_32x32, 32,0, &demoFunc},
+            {&pwr_32x32, 64, 0, &demoFunc},
+            {&settings_32x32, 96, 0, &demoFunc}
+            };
 
 static dataCollection_t data;
+
+static data_t testData[] = {{0,"Vin: %2d.%1d",vFLOAT},{0,"Vcap:%2d.%1d",vFLOAT},{0,"Temp:%2d.%1d",vFLOAT}};
 
 static bool autoweld=false, fanOn=false;
 
@@ -156,7 +137,7 @@ dataCollection_t* initLogic()
 {
     ST7735_Init();
 	ST7735_FillScreen(ST7735_GREEN);
-	//  HAL_ADC_Start_DMA(&hadc,(uint32_t *)adcBuffer,ADC_BUFF_SIZE);
+    HAL_ADC_Start_DMA(&hadc,(uint32_t *)adcBuffer,ADC_BUFF_SIZE);
 	return &data;
 }
 
@@ -194,9 +175,9 @@ static void drawBar(uint16_t x, uint16_t y, value_t value, uint16_t color)
 	uint8_t len = ((value.val-value.min)*barlen)/(value.max-value.min);
 
 
-	ST7735_FillRectangle(x,y,2,barHeight,ST7735_WHITE);                       //  ||         |         |
-	ST7735_FillRectangle(x+2,y+barMid,barlen,1,ST7735_WHITE);                 //  ||----|----|----|----|
-	for(int i =1; i<NSeg; i++)                                                //  ||         |         |
+	ST7735_FillRectangle(x,y,2,barHeight,ST7735_WHITE);                     //  ||         |         |
+	                                                                         //  ||----|----|----|----|
+	for(int i =1; i<NSeg; i++)                                              //  ||         |         |
 	{
 		if(i%2)
 			ST7735_FillRectangle(x+2+i*barSegWidth,y+barMid-3,1,barMid,ST7735_WHITE);
@@ -205,11 +186,12 @@ static void drawBar(uint16_t x, uint16_t y, value_t value, uint16_t color)
 	}
 		ST7735_FillRectangle(x+2+NSeg*barSegWidth,y,2,barHeight,ST7735_WHITE);
 
-		ST7735_FillRectangle(x+2,y+barMid-2,barlen,5,ST7735_BLACK);
+		ST7735_FillRectangle(x+2+len,y+barMid-2,barlen-len,5,ST7735_BLACK);
+        //ST7735_FillRectangle(x+2,y+barMid,barlen,1,ST7735_WHITE);
 		ST7735_FillRectangle(x+2,y+barMid-2,len,5,color);
 
 		sprintf(strBuffer,"%dms",value.val);
-		ST7735_WriteString(x+5+barlen, y, strBuffer, Font_7x10, ST7735_WHITE, ST7735_BLACK);
+		ST7735_WriteString(x+5+barlen, y+3, strBuffer, Font_7x10, ST7735_WHITE, ST7735_BLACK);
 }
 
 void demoMenu(buttonEvent_t menuBtnEvent, rotaryEvent_t *rotEvent)
@@ -236,7 +218,7 @@ void demoMenu(buttonEvent_t menuBtnEvent, rotaryEvent_t *rotEvent)
 	ST7735_DrawImageMono(32, 32, image_data_attention_32x32, attention_32x32.width, attention_32x32.height, index==5? ST7735_GREEN:ST7735_RED, ST7735_BLACK);
 	ST7735_DrawImageMono(32, 96, image_data_fan_32x32, fan_32x32.width, fan_32x32.height, index==7? ST7735_GREEN:ST7735_RED, ST7735_BLACK);
 
-	ST7735_DrawImageMono(64, 0, image_data_battery1_32x32, battery1_32x32.width, battery1_32x32.height, index==8? ST7735_GREEN:ST7735_RED, ST7735_BLACK);
+	ST7735_DrawImageMono(64, 0, image_data_battery_32x32, battery_32x32.width, battery_32x32.height, index==8? ST7735_GREEN:ST7735_RED, ST7735_BLACK);
 
 }
 
@@ -264,8 +246,7 @@ void menu1()
 void drawMenuBar()
 {
     drawIcon(&menuIcons[0],fanOn);
-    drawIcon(&menuIcons[3],state==SETTINGS);
-
+    //drawIcon(&menuIcons[3],state==SETTINGS);
 }
 
 void plotGraph(uint8_t *xValues, uint8_t *yValues, uint8_t xRange, uint8_t yRange, uint8_t N)
@@ -315,7 +296,18 @@ void makeStr(char *strbuf, value_t *value)
     }
 }
 
-bool drawSettingsMenu(buttonEvent_t menuBtnEvent, rotaryEvent_t rotEvent)
+
+void makeStr2(char *strbuf, data_t *data)
+{
+    switch(data->type)
+    {
+        default:
+        case vINT: sprintf(strbuf,data->desc,data->val); break;
+        case vFLOAT: sprintf(strbuf,data->desc,data->val/10,data->val%10); break;
+    }
+}
+
+bool drawSettingsMenu(buttonEvent_t menuBtnEvent, rotaryEvent_t rotEvent, bool force)
 {
     bool exit=false;
     static bool selected=false;
@@ -349,8 +341,15 @@ bool drawSettingsMenu(buttonEvent_t menuBtnEvent, rotaryEvent_t rotEvent)
 //TODO: only draw when something has changed?
    for(int i=0; i<5; i++)
    {	
-        makeStr(strBuffer,&settingValues[i]);
-	    ST7735_WriteString(0,i*15,strBuffer,Font_7x10,(idx==i)? (selected? ST7735_BLUE:ST7735_RED):ST7735_WHITE, ST7735_BLACK);
+        if(rotEvent!=ROT_NONE || menuBtnEvent==SHRT_PRESSED || force)
+        {
+            makeStr(strBuffer,&settingValues[i]);
+            ST7735_WriteString(0,i*15,strBuffer,Font_7x10,(idx==i)? (selected? ST7735_BLUE:ST7735_RED):ST7735_WHITE, ST7735_BLACK);
+            if((i==idx || force)&& i<4)
+            { 
+                drawBar(64,i*15,settingValues[i],ST7735_BLUE);
+            }
+        }
    }
 
 	if((idx==4)&&selected)
@@ -363,6 +362,16 @@ bool drawSettingsMenu(buttonEvent_t menuBtnEvent, rotaryEvent_t rotEvent)
 	return exit;
 }
 
+
+void drawTiming()
+{
+    sprintf(strBuffer,"%2d",settingValues[0].val);
+    ST7735_WriteString(0,110,strBuffer,Font_11x18,ST7735_GREEN,ST7735_GREY);
+    sprintf(strBuffer,"%3d",settingValues[2].val);
+    ST7735_WriteString(30,110,strBuffer,Font_11x18,ST7735_GREEN,ST7735_GREY);
+    sprintf(strBuffer,"%3d",settingValues[1].val);
+    ST7735_WriteString(82,110,strBuffer,Font_11x18,ST7735_GREEN,ST7735_GREY);
+}
 
 
 void drawVolume(uint8_t x, uint8_t y, uint8_t vol)
@@ -420,26 +429,12 @@ void updateState()
 {
     static state_t lastState=999;
 	static uint8_t mode=0;
-	uint8_t xTest[]={0,1,2,3,4,5,6,7,8,9,10,11,12,13,14}, yTest[]={5,7,8,9,8,7,5,3,2,1,2,3,5};
+    static int cnt=0;
 
-
-    //buttonEvent_t tmpMenuBtnEvent = *menuBtnEvent, tmpFootSwEvent = *footSwEvent;
-    //rotaryEvent_t tmpRotEvent = *rotEvent; 
+    //save values to local variables to check at the end wether they have been changed by an interrupt
     buttonEvent_t tmpMenuBtnEvent = buttonEvent, tmpFootSwEvent = footSwEvent;
     rotaryEvent_t tmpRotEvent = rotEvent; 
 
-	/*
-	sprintf(strBuffer,"Supply: %2.2f", data.vSupply);
-	ST7735_WriteString(0, 0, strBuffer, Font_7x10, ST7735_WHITE, ST7735_BLACK);
-	sprintf(strBuffer,"VCap: %2.2f", data.vCap);
-	ST7735_WriteString(0, 11, strBuffer, Font_7x10, ST7735_WHITE, ST7735_BLACK);
-	sprintf(strBuffer,"VBar: %2.2f", data.vBar);
-	ST7735_WriteString(0, 22, strBuffer, Font_7x10, ST7735_WHITE, ST7735_BLACK);
-	sprintf(strBuffer,"Temp1: %2.2f", data.temp1);
-	ST7735_WriteString(0, 33, strBuffer, Font_7x10, ST7735_WHITE, ST7735_BLACK);
-	sprintf(strBuffer,"Temp2: %2.2f", data.temp2);
-	ST7735_WriteString(0, 44, strBuffer, Font_7x10, ST7735_WHITE, ST7735_BLACK);
-*/
 	static int tmp=0;
 
 
@@ -454,37 +449,35 @@ void updateState()
 
 		  fanSetValue(data.temp1);
 
+          testData[0].val = (int16_t)(10*data.vSupply);
+          testData[1].val = (int16_t)(10*data.vCap);
+          testData[2].val = (int16_t)(10*data.temp1);
+
 		  adcReady=0;
 		  HAL_ADC_Start_DMA(&hadc,(uint32_t *)adcBuffer,ADC_BUFF_SIZE);
 	  }
 
-	/*if(*menuBtnEvent==LONG_PRESSED) mode =1;
-	if(mode==1)
-		drawSettingsMenu(*menuBtnEvent,*rotEvent);
-	else
-	{
-		ST7735_FillScreen(ST7735_BLACK);
-		menu1();
-        //HAL_Delay(1000);
-        //ST7735_DrawImageMono(0,0,boot_160x128.data,boot_160x128.width,boot_160x128.height,ST7735_WHITE,ST7735_BLACK);
-        //HAL_Delay(2000);
+	  //if(state!=lastState)
+      //{
+	  //    drawMenuBar();
+      //  }
+	  //lastState=state;
 
-		//plotGraph(xTest,yTest,10,10,14);
-		//demoMenu(*menuBtnEvent,rotEvent);
-		//drawVolume(130,0,tmp++);
-	}
-	if(tmp>=100) tmp=0;*/
-
-
-	//drawBar(0,0,p1Values,ST7735_RED);
-
-	//sprintf(strBuffer,"HALLO WELT -> 12345678");
-	//for(int l=2; l<11; l++) ST7735_WriteString(0, l*11, strBuffer, Font_7x10, tmp? ST7735_WHITE:ST7735_RED, ST7735_BLACK);
-
-
-	  if(state!=lastState)
+      if(++cnt>100)
+      {
+          cnt=0;
+          if(state!=SETTINGS)
+          {
+            for(int i=0; i<3; i++)
+            {
+                makeStr2(strBuffer,&testData[i]);
+                ST7735_WriteString(0,i*19+15,strBuffer,Font_11x18,ST7735_BLUE,ST7735_BLACK);
+            }
+            drawTiming();
 	      drawMenuBar();
-	  lastState=state;
+
+          }
+      }
 
 	switch(state)
 	{
@@ -496,12 +489,14 @@ void updateState()
 			ST7735_FillScreen(ST7735_BLACK);
             drawIcon(&menuIcons[2],false);
             drawIcon(&menuIcons[1],false);
+            drawIcon(&menuIcons[3],false);
 			setLEDColor(0,0,100);
 			state = IDLE;
 			break;
 		case IDLE:
 		    if(tmpMenuBtnEvent == DOUBLE_PRESSED) state=ENTER_CHARGING;
 		    else if(tmpMenuBtnEvent == LONG_PRESSED) state=ENTER_SETTINGS;
+            if(tmpFootSwEvent == SHRT_PRESSED) state=ENTER_WELDING;
 		break;
 
 		case ENTER_CHARGING:
@@ -551,17 +546,23 @@ void updateState()
 		case ENTER_WELDING:
 			setLEDColor(100,100,100);
             weldingState=WELDING1;
-            startPulse(settingValues[0].val-1,0);
+            startPulse(settingValues[0].val-1,settingValues[2].val-1);
 			state=WELDING;
 			break;
 
 		case WELDING:
-		    if(weldingState==WAITING) state = ENTER_WELDQUALITY;
+		    //if(weldingState==WAITING) state = ENTER_WELDQUALITY;
+		    if(weldingState==WAITING) state = ENTER_IDLE;
 		    break;
 
-		case ENTER_SETTINGS: state = SETTINGS; break;
+		case ENTER_SETTINGS: 
+            state = SETTINGS; 
+			ST7735_FillScreen(ST7735_BLACK);
+            drawIcon(&menuIcons[3],true);
+            drawSettingsMenu(tmpMenuBtnEvent,tmpRotEvent,true);
+            break;
 		case SETTINGS:
-		    if(drawSettingsMenu(tmpMenuBtnEvent,tmpRotEvent)) state=ENTER_IDLE;
+		    if(drawSettingsMenu(tmpMenuBtnEvent,tmpRotEvent,false)) state=ENTER_IDLE;
 		    break;
 
 		case ENTER_WELDQUALITY:
