@@ -14,6 +14,7 @@
 * limitations under the License.                                            *
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
+#include "stdlib.h"
 #include "main.h"
 #include "logic.h"
 #include "helpers.h"
@@ -51,7 +52,7 @@ value_t p1Values ={1,20,20,1}, p2Values={10,500,500,10}, pauseValues={5,100,100,
 
 
 //value_t settingValues[] = {{1,10,20,1, "pulse1: %d",vINT}, {10,150,500,10, "pulse2: %d",vINT}, {5,20,100,5, "pause: %d",vINT}, {10,50,100,5, "voltage: %02d.%1d",vFLOAT}, {0,0,0,0, "exit?",vSTRING}}; //pulse1 duration, pulse2 duration, pause duration, voltage x10, exit
-value_t settingValues[] = {{1,10,20,1, "pulse1:",vSTRING}, {10,150,500,10, "pulse2:",vSTRING}, {5,20,100,5, "pause:",vSTRING}, {10,50,100,5, "voltage:",vSTRING}, {0,0,0,0, "exit?",vSTRING}}; //pulse1 duration, pulse2 duration, pause duration, voltage x10, exit
+value_t settingValues[] = {{1,5,20,1, "pulse1:",vSTRING}, {10,150,500,10, "pulse2:",vSTRING}, {5,15,100,5, "pause:",vSTRING}, {10,30,100,5, "voltage:",vSTRING}, {0,0,0,0, "exit?",vSTRING}}; //pulse1 duration, pulse2 duration, pause duration, voltage x10, exit
 
 //typedef menuIcon_t menuIcon_t;
 
@@ -127,7 +128,7 @@ static bool autoweld=false, fanOn=false;
 
 static state_t state = ENTER_IDLE;
 
-static settingsCollection_t settings  = {100, 100, 100, false, 5.0f};
+static settingsCollection_t settings  = {100, 100, 100, false, 3.0f};
 
 static char strBuffer[32];
 
@@ -430,6 +431,7 @@ void updateState()
     static state_t lastState=999;
 	static uint8_t mode=0;
     static int cnt=0;
+    static int autoWeldCnt=0;
 
     //save values to local variables to check at the end wether they have been changed by an interrupt
     buttonEvent_t tmpMenuBtnEvent = buttonEvent, tmpFootSwEvent = footSwEvent;
@@ -496,21 +498,21 @@ void updateState()
 		case IDLE:
 		    if(tmpMenuBtnEvent == DOUBLE_PRESSED) state=ENTER_CHARGING;
 		    else if(tmpMenuBtnEvent == LONG_PRESSED) state=ENTER_SETTINGS;
-            if(tmpFootSwEvent == SHRT_PRESSED) state=ENTER_WELDING;
+            //if(tmpFootSwEvent == SHRT_PRESSED) state=ENTER_WELDING;
 		break;
 
 		case ENTER_CHARGING:
 			setLEDColor(100,0,0);
 		    drawIcon(&menuIcons[2],true);
 		    drawIcon(&menuIcons[1],autoweld);
-            drawVolume(50,50,100);
+            //drawVolume(50,50,100);
             //playerStart();
 			chargerPowerOn();
 			state = CHARGING;
 			break;
 		case CHARGING:
-			if(++counter>100){counter=0; state=ENTER_CHARGED;}
-			//if(data.vCap >= settings.vCap) state=ENTER_CHARGED;
+			//if(++counter>200){counter=0; state=ENTER_CHARGED;}
+			if(data.vCap >= settings.vCap) state=ENTER_CHARGED;
 		break;
 
 		case ENTER_CHARGED:
@@ -528,6 +530,21 @@ void updateState()
                 drawIcon(&menuIcons[1],autoweld);
             }
 			if(tmpFootSwEvent==SHRT_PRESSED) state=ENTER_WELDING;
+            if(autoweld && (fabs(data.vBar-data.vCap)<0.25))
+            {
+                setLEDColor(100,100,0);
+                if(++autoWeldCnt>200)
+                {
+                    state=ENTER_WELDING;
+                    autoWeldCnt =0;
+                }
+            }
+            else
+            {
+                autoWeldCnt=0;
+                setLEDColor(0,100,0);
+            }
+            
 		break;
 
 		case ENTER_DISCHARGING:
@@ -539,20 +556,20 @@ void updateState()
 			break;
 
 		case DISCHARGING:
-			if(++counter>510){counter=0; state=ENTER_IDLE;}
+			//if(++counter>510){counter=0; state=ENTER_IDLE;}
 			if(data.vCap <= 0.5f) state=ENTER_IDLE;
 				break;
 
 		case ENTER_WELDING:
-			setLEDColor(100,100,100);
+			setLEDColor(50,50,50);
             weldingState=WELDING1;
             startPulse(settingValues[0].val-1,settingValues[2].val-1);
 			state=WELDING;
 			break;
 
 		case WELDING:
-		    //if(weldingState==WAITING) state = ENTER_WELDQUALITY;
-		    if(weldingState==WAITING) state = ENTER_IDLE;
+		    if(weldingState==WAITING) state = ENTER_CHARGING;
+		    //if(weldingState==WAITING) state = ENTER_IDLE;
 		    break;
 
 		case ENTER_SETTINGS: 
@@ -562,7 +579,11 @@ void updateState()
             drawSettingsMenu(tmpMenuBtnEvent,tmpRotEvent,true);
             break;
 		case SETTINGS:
-		    if(drawSettingsMenu(tmpMenuBtnEvent,tmpRotEvent,false)) state=ENTER_IDLE;
+		    if(drawSettingsMenu(tmpMenuBtnEvent,tmpRotEvent,false)) 
+            {
+                state=ENTER_IDLE;
+                settings.vCap = ((float)settingValues[3].val)/10;
+            }
 		    break;
 
 		case ENTER_WELDQUALITY:
